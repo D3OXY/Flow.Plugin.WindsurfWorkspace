@@ -17,56 +17,114 @@ namespace Flow.Plugin.VSCodeWorkspaces.RemoteMachinesHelper
         {
         }
 
+        private List<VSCodeRemoteMachine> _machines = new List<VSCodeRemoteMachine>();
+
         public List<VSCodeRemoteMachine> Machines
         {
-            get
+            get { return _machines; }
+        }
+
+        public void LoadMachines(VSCodeInstance vscodeInstance)
+        {
+            _machines.Clear();
+
+            // Load SSH config machines
+            var sshConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh", "config");
+            if (File.Exists(sshConfigPath))
             {
-                var results = new List<VSCodeRemoteMachine>();
-
-                foreach (var vscodeInstance in VSCodeInstances.Instances)
+                try
                 {
-                    // settings.json contains path of ssh_config
-                    var vscode_settings = Path.Combine(vscodeInstance.AppData, "User\\settings.json");
+                    var configContent = File.ReadAllText(sshConfigPath);
+                    var configLines = configContent.Split('\n');
+                    var currentHost = string.Empty;
+                    var currentHostName = string.Empty;
+                    var currentUser = string.Empty;
 
-                    if (File.Exists(vscode_settings))
+                    foreach (var line in configLines)
                     {
-                        var fileContent = File.ReadAllText(vscode_settings);
+                        var trimmedLine = line.Trim();
+                        if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("#"))
+                            continue;
 
-                        try
+                        if (trimmedLine.StartsWith("Host ", StringComparison.OrdinalIgnoreCase))
                         {
-                            JsonElement vscodeSettingsFile = JsonSerializer.Deserialize<JsonElement>(fileContent, new JsonSerializerOptions
+                            if (!string.IsNullOrEmpty(currentHost) && !string.IsNullOrEmpty(currentHostName))
                             {
-                                AllowTrailingCommas = true,
-                                ReadCommentHandling = JsonCommentHandling.Skip,
-                            });
-                            if (vscodeSettingsFile.TryGetProperty("remote.SSH.configFile", out var pathElement))
-                            {
-                                var path = pathElement.GetString();
-
-                                if (File.Exists(path))
+                                var machine = new VSCodeRemoteMachine
                                 {
-                                    foreach (SshHost h in SshConfig.ParseFile(path))
-                                    {
-                                        var machine = new VSCodeRemoteMachine();
-                                        machine.Host = h.Host;
-                                        machine.VSCodeInstance = vscodeInstance;
-                                        machine.HostName = h.HostName != null ? h.HostName : string.Empty;
-                                        machine.User = h.User != null ? h.User : string.Empty;
-
-                                        results.Add(machine);
-                                    }
-                                }
+                                    Name = currentHost,
+                                    Type = "ssh-remote",
+                                    Host = currentHostName,
+                                    User = currentUser,
+                                    VSCodeInstance = vscodeInstance
+                                };
+                                _machines.Add(machine);
                             }
+
+                            currentHost = trimmedLine["Host ".Length..].Trim();
+                            currentHostName = string.Empty;
+                            currentUser = string.Empty;
                         }
-                        catch (Exception ex)
+                        else if (trimmedLine.StartsWith("HostName ", StringComparison.OrdinalIgnoreCase))
                         {
-                            var message = $"Failed to deserialize ${vscode_settings}";
-                            Main._context.API.LogException("VSCodeWorkSpaces", message, ex);
+                            currentHostName = trimmedLine["HostName ".Length..].Trim();
+                        }
+                        else if (trimmedLine.StartsWith("User ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            currentUser = trimmedLine["User ".Length..].Trim();
+                        }
+                    }
+
+                    // Add the last machine if it exists
+                    if (!string.IsNullOrEmpty(currentHost) && !string.IsNullOrEmpty(currentHostName))
+                    {
+                        var machine = new VSCodeRemoteMachine
+                        {
+                            Name = currentHost,
+                            Type = "ssh-remote",
+                            Host = currentHostName,
+                            User = currentUser,
+                            VSCodeInstance = vscodeInstance
+                        };
+                        _machines.Add(machine);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var message = $"Failed to parse SSH config file: {sshConfigPath}";
+                    Main._context.API.LogException("VSCodeRemoteMachinesApi", message, ex);
+                }
+            }
+
+            // Load GitHub Codespaces
+            var codespaceStoragePath = Path.Combine(vscodeInstance.AppData, "User", "globalStorage", "GitHub.codespaces");
+            if (Directory.Exists(codespaceStoragePath))
+            {
+                try
+                {
+                    var files = Directory.GetFiles(codespaceStoragePath, "*.json");
+                    foreach (var file in files)
+                    {
+                        var content = File.ReadAllText(file);
+                        var codespace = JsonSerializer.Deserialize<GitHubCodespace>(content);
+                        if (codespace != null)
+                        {
+                            var machine = new VSCodeRemoteMachine
+                            {
+                                Name = codespace.FriendlyName,
+                                Type = "codespaces",
+                                Host = codespace.Name,
+                                VSCodeInstance = vscodeInstance
+                            };
+                            _machines.Add(machine);
                         }
                     }
                 }
-
-                return results;
+                catch (Exception ex)
+                {
+                    var message = $"Failed to parse GitHub Codespaces from: {codespaceStoragePath}";
+                    Main._context.API.LogException("VSCodeRemoteMachinesApi", message, ex);
+                }
             }
         }
     }

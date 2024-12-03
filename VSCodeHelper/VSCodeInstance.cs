@@ -13,6 +13,7 @@ namespace Flow.Plugin.VSCodeWorkspaces.VSCodeHelper
         Stable = 1,
         Insiders = 2,
         Exploration = 3,
+        Windsurf = 4,
     }
 
     public class VSCodeInstance : IEquatable<VSCodeInstance>

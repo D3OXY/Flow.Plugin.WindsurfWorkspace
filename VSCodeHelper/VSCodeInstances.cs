@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation
+// Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
@@ -65,10 +65,34 @@ namespace Flow.Plugin.VSCodeWorkspaces.VSCodeHelper
             if (_systemPath == Environment.GetEnvironmentVariable("PATH"))
                 return;
 
-
+            _systemPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
             Instances = new List<VSCodeInstance>();
 
-            _systemPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+            // Find Windsurf installation
+            var windsurfPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "windsurf", "Windsurf.exe");
+            if (File.Exists(windsurfPath))
+            {
+                var windsurfAppData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "windsurf");
+                if (Directory.Exists(windsurfAppData))
+                {
+                    var assemblyPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                    if (assemblyPath != null)
+                    {
+                        var resourcePath = Path.Combine(assemblyPath, "Images");
+                        var instance = new VSCodeInstance
+                        {
+                            VSCodeVersion = VSCodeVersion.Windsurf,
+                            ExecutablePath = windsurfPath,
+                            AppData = windsurfAppData,
+                            WorkspaceIconBitMap = Bitmap2BitmapImage((Bitmap)Image.FromFile(Path.Combine(resourcePath, "folder.png"))),
+                            RemoteIconBitMap = Bitmap2BitmapImage((Bitmap)Image.FromFile(Path.Combine(resourcePath, "monitor.png")))
+                        };
+                        Instances.Add(instance);
+                    }
+                }
+            }
+
+            // Find VSCode installations
             var paths = _systemPath.Split(";").Where(x =>
                 x.Contains("VS Code", StringComparison.OrdinalIgnoreCase) ||
                 x.Contains("codium", StringComparison.OrdinalIgnoreCase) ||
@@ -126,7 +150,6 @@ namespace Flow.Plugin.VSCodeWorkspaces.VSCodeHelper
 
                 if (version == string.Empty)
                     continue;
-
 
                 var portableData = Path.Join(iconPath, "data");
                 instance.AppData = Directory.Exists(portableData) ? Path.Join(portableData, "user-data") : Path.Combine(_userAppDataPath, version);

@@ -9,6 +9,10 @@ namespace Flow.Plugin.VSCodeWorkspaces.RemoteMachinesHelper
 {
     public class VSCodeRemoteMachine : IEquatable<VSCodeRemoteMachine>
     {
+        public string Name { get; set; }
+
+        public string Type { get; set; }
+
         public string Host { get; set; }
 
         public string User { get; set; }
@@ -22,7 +26,7 @@ namespace Flow.Plugin.VSCodeWorkspaces.RemoteMachinesHelper
                 return false;
             if (ReferenceEquals(this, other))
                 return true;
-            return Host == other.Host && User == other.User && HostName == other.HostName && Equals(VSCodeInstance, other.VSCodeInstance);
+            return Name == other.Name && Type == other.Type && Host == other.Host && User == other.User && HostName == other.HostName && Equals(VSCodeInstance, other.VSCodeInstance);
         }
         public override bool Equals(object obj)
         {
@@ -36,7 +40,7 @@ namespace Flow.Plugin.VSCodeWorkspaces.RemoteMachinesHelper
         }
         public override int GetHashCode()
         {
-            return HashCode.Combine(Host, User, HostName, VSCodeInstance);
+            return HashCode.Combine(Name, Type, Host, User, HostName, VSCodeInstance);
         }
     }
 }

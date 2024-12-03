@@ -183,12 +183,18 @@ namespace Flow.Plugin.VSCodeWorkspaces
         {
             _context = context;
             _settings = context.API.LoadSettingJsonStorage<Settings>();
-
             VSCodeInstances.LoadVSCodeInstances();
 
-            // Prefer stable version, or the first one we got
-            defaultInstalce = VSCodeInstances.Instances.Find(e => e.VSCodeVersion == VSCodeVersion.Stable) ??
-                              VSCodeInstances.Instances.FirstOrDefault();
+            // Initialize with any available instance, preferring stable VSCode or Windsurf
+            defaultInstalce = VSCodeInstances.Instances.FirstOrDefault(x => x.VSCodeVersion == VSCodeVersion.Stable) 
+                ?? VSCodeInstances.Instances.FirstOrDefault(x => x.VSCodeVersion == VSCodeVersion.Windsurf)
+                ?? VSCodeInstances.Instances.FirstOrDefault();
+
+            if (defaultInstalce != null)
+            {
+                _workspacesApi.LoadWorkspaces(defaultInstalce);
+                _machinesApi.LoadMachines(defaultInstalce);
+            }
         }
 
         public Control CreateSettingPanel() => new SettingsView(_context, _settings);

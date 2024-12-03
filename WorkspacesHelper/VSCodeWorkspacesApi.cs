@@ -53,57 +53,57 @@ namespace Flow.Plugin.VSCodeWorkspaces.WorkspacesHelper
 
         public Regex workspaceLabelParser = new Regex("(.+?)(\\[.+\\])");
 
-        public List<VSCodeWorkspace> Workspaces
+        public List<VSCodeWorkspace> Workspaces { get; private set; } = new List<VSCodeWorkspace>();
+
+        public void LoadWorkspaces(VSCodeInstance vscodeInstance)
         {
-            get
+            Workspaces.Clear();
+            var storageFile = Path.Combine(vscodeInstance.AppData, "storage.json");
+
+            if (File.Exists(storageFile))
             {
-                var results = new List<VSCodeWorkspace>();
-
-                foreach (var vscodeInstance in VSCodeInstances.Instances)
+                try
                 {
-                    // storage.json contains opened Workspaces
-                    var vscodeStorage = Path.Combine(vscodeInstance.AppData, "storage.json");
+                    var fileContent = File.ReadAllText(storageFile);
+                    var vscodeStorageFile = JsonSerializer.Deserialize<VSCodeStorageFile>(fileContent);
 
-                    if (File.Exists(vscodeStorage))
+                    if (vscodeStorageFile != null)
                     {
-                        var fileContent = File.ReadAllText(vscodeStorage);
-
-                        try
+                        // for previous versions of vscode/windsurf
+                        if (vscodeStorageFile.OpenedPathsList?.Workspaces3 != null)
                         {
-                            var vscodeStorageFile = JsonSerializer.Deserialize<VSCodeStorageFile>(fileContent);
-
-                            if (vscodeStorageFile != null)
-                            {
-                                // for previous versions of vscode
-                                if (vscodeStorageFile.OpenedPathsList?.Workspaces3 != null)
-                                {
-                                    results.AddRange(
-                                        vscodeStorageFile.OpenedPathsList.Workspaces3
-                                            .Select(workspaceUri => ParseVSCodeUri(workspaceUri, vscodeInstance))
-                                            .Where(uri => uri != null)
-                                            .Select(uri => (VSCodeWorkspace)uri));
-                                }
-
-                                // vscode v1.55.0 or later
-                                if (vscodeStorageFile.OpenedPathsList?.Entries != null)
-                                {
-                                    results.AddRange(vscodeStorageFile.OpenedPathsList.Entries
-                                        .Select(x => x.FolderUri)
-                                        .Select(workspaceUri => ParseVSCodeUri(workspaceUri, vscodeInstance))
-                                        .Where(uri => uri != null));
-                                }
-                            }
+                            Workspaces.AddRange(
+                                vscodeStorageFile.OpenedPathsList.Workspaces3
+                                    .Select(workspaceUri => ParseVSCodeUri(workspaceUri, vscodeInstance))
+                                    .Where(uri => uri != null)
+                                    .Cast<VSCodeWorkspace>());
                         }
-                        catch (Exception ex)
+
+                        // vscode/windsurf v1.55.0 or later
+                        if (vscodeStorageFile.OpenedPathsList?.Entries != null)
                         {
-                            var message = $"Failed to deserialize ${vscodeStorage}";
-                            Main._context.API.LogException("VSCodeWorkspaceApi", message, ex);
+                            Workspaces.AddRange(vscodeStorageFile.OpenedPathsList.Entries
+                                .Select(x => x.FolderUri)
+                                .Select(workspaceUri => ParseVSCodeUri(workspaceUri, vscodeInstance))
+                                .Where(uri => uri != null)
+                                .Cast<VSCodeWorkspace>());
                         }
                     }
+                }
+                catch (Exception ex)
+                {
+                    var message = $"Failed to deserialize {storageFile}";
+                    Main._context.API.LogException("VSCodeWorkspaceApi", message, ex);
+                }
+            }
 
-                    // for vscode v1.64.0 or later
-                    using var connection = new SqliteConnection(
-                        $"Data Source={vscodeInstance.AppData}/User/globalStorage/state.vscdb;mode=readonly;cache=shared;");
+            // for vscode/windsurf v1.64.0 or later
+            var statePath = Path.Combine(vscodeInstance.AppData, "User", "globalStorage", "state.vscdb");
+            if (File.Exists(statePath))
+            {
+                try
+                {
+                    using var connection = new SqliteConnection($"Data Source={statePath};mode=readonly;cache=shared;");
                     connection.Open();
                     var command = connection.CreateCommand();
                     command.CommandText = "SELECT value FROM ItemTable where key = 'history.recentlyOpenedPathsList'";
@@ -112,32 +112,37 @@ namespace Flow.Plugin.VSCodeWorkspaces.WorkspacesHelper
                     {
                         using var historyDoc = JsonDocument.Parse(result.ToString()!);
                         var root = historyDoc.RootElement;
-                        if (!root.TryGetProperty("entries", out var entries))
-                            continue;
-                        foreach (var entry in entries.EnumerateArray())
+                        if (root.TryGetProperty("entries", out var entries))
                         {
-                            if (!entry.TryGetProperty("folderUri", out var folderUri))
-                                continue;
-                            var workspaceUri = folderUri.GetString();
-                            var workspace = ParseVSCodeUri(workspaceUri, vscodeInstance);
-                            if (workspace == null)
-                                continue;
-
-                            if (entry.TryGetProperty("label", out var label))
+                            foreach (var entry in entries.EnumerateArray())
                             {
-                                var labelString = label.GetString()!;
-                                var matchGroup = workspaceLabelParser.Match(labelString);
-                                workspace = workspace with {
-                                    Lable = $"{matchGroup.Groups[2]} {matchGroup.Groups[1]}"
-                                };
-                            }
+                                if (!entry.TryGetProperty("folderUri", out var folderUri))
+                                    continue;
+                                var workspaceUri = folderUri.GetString();
+                                var workspace = ParseVSCodeUri(workspaceUri, vscodeInstance);
+                                if (workspace == null)
+                                    continue;
 
-                            results.Add(workspace);
+                                if (entry.TryGetProperty("label", out var label))
+                                {
+                                    var labelString = label.GetString()!;
+                                    var matchGroup = workspaceLabelParser.Match(labelString);
+                                    if (matchGroup.Success)
+                                    {
+                                        workspace = workspace with { Lable = $"{matchGroup.Groups[2]} {matchGroup.Groups[1]}" };
+                                    }
+                                }
+
+                                Workspaces.Add(workspace);
+                            }
                         }
                     }
                 }
-
-                return results;
+                catch (Exception ex)
+                {
+                    var message = $"Failed to read workspace history from {statePath}";
+                    Main._context.API.LogException("VSCodeWorkspaceApi", message, ex);
+                }
             }
         }
     }

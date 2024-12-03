@@ -6,7 +6,7 @@
 		<RootNamespace>Flow.Plugin.VSCodeWorkspaces</RootNamespace>
 		<AssemblyName>Flow.Plugin.VSCodeWorkspaces</AssemblyName>
 		<OutputType>Library</OutputType>
-		<Version>1.0</Version>
+		<Version>1.3.3</Version>
 		<useWPF>true</useWPF>
 		<Platforms>x64</Platforms>
 		<AppendRuntimeIdentifierToOutputPath>False</AppendRuntimeIdentifierToOutputPath>
@@ -14,10 +14,11 @@
 		<Nullable>warnings</Nullable>
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
 		<DebugSymbols>true</DebugSymbols>
-		<OutputPath>Output\Debug\VSCodeWorkspaces\</OutputPath>
+		<OutputPath>Output\Debug\VSCodeWorkspaces-$(Version)\</OutputPath>
 		<DefineConstants>DEBUG;TRACE</DefineConstants>
 		<DebugType>portable</DebugType>
 		<PlatformTarget>x64</PlatformTarget>
@@ -28,7 +29,7 @@
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-		<OutputPath>Output\Release\VSCodeWorkspaces\</OutputPath>
+		<OutputPath>Output\Release\VSCodeWorkspaces-$(Version)\</OutputPath>
 		<DefineConstants>TRACE</DefineConstants>
 		<Optimize>true</Optimize>
 		<DebugType>portable</DebugType>
